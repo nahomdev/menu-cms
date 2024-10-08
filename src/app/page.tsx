@@ -1,101 +1,147 @@
-import Image from "next/image";
+"use client";
+import React, { useEffect, useState } from "react";
+import { RxDashboard } from "react-icons/rx";
+import {
+  useQuery,
+  useMutation,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
+import { useDispatch, useSelector } from "react-redux";
+import { Provider } from "react-redux";
+import { store } from "../store/store";
+import { setMenuItems, addMenuItem } from "../store/menuSlice";
+import Dropdown from "@/components/dropdown";
+import MenuTree from "@/components/FolderTree";
+import AddMenuForm from "@/components/addMenu";
+import { fetchMenuItems, addMenuItem as addMenuItemApi } from "../services/api";
+import { MenuItem } from "../types";
+
+const queryClient = new QueryClient();
+
+const options = [{ value: "System Management", label: "system_management" }];
+
+function transformToNestedStructure(flatData: MenuItem[]): MenuItem[] {
+  const idMap: { [key: number]: MenuItem } = {};
+  const root: MenuItem[] = [];
+
+  flatData.forEach((item) => {
+    idMap[item.id] = { ...item, children: [] };
+  });
+
+  flatData.forEach((item) => {
+    if (item.parentId === null) {
+      root.push(idMap[item.id]);
+    } else {
+      idMap[item.parentId].children.push(idMap[item.id]);
+    }
+  });
+
+  return root;
+}
+
+function HomeContent() {
+  const dispatch = useDispatch();
+  const menuStructure = useSelector((state: any) => state.menu.items);
+  const [selectedParentId, setSelectedParentId] = useState<number | null>(null);
+  const [selectedParentName, setSelectedParentName] = useState<string>("");
+  const [selectedDepth, setSelectedDepth] = useState<number>(0);
+
+  const { data, isLoading, error, isSuccess } = useQuery<MenuItem[], Error>({
+    queryKey: ["menuItems"],
+    queryFn: fetchMenuItems,
+  });
+
+  const addMenuItemMutation = useMutation({
+    mutationFn: (newItem: {
+      name: string;
+      parentId: number | null;
+      id: string;
+      depth: number;
+    }) =>
+      addMenuItemApi(newItem.name, newItem.parentId, newItem.id, newItem.depth),
+    onSuccess: (data) => {
+      console.log("New item added:", data);
+      dispatch(addMenuItem(data));
+      fetchMenuItems();
+      queryClient.invalidateQueries(["menuItems"]);
+    },
+  });
+
+  useEffect(() => {
+    if (data) {
+      const nestedData = transformToNestedStructure(data);
+      dispatch(setMenuItems(nestedData));
+    }
+  }, [data, dispatch]);
+
+  const handleAddSubmenu = (
+    parentId: number,
+    parentName: string,
+    depth: number
+  ) => {
+    setSelectedParentId(parentId);
+    setSelectedParentName(parentName);
+    setSelectedDepth(depth + 1);
+  };
+
+  const addNewMenuItem = async (name: string, id: string, depth: number) => {
+    // console.log("name ", name, "id ", id, "depth ", depth);
+    if (selectedParentId !== null) {
+      addMenuItemMutation.mutate({
+        name,
+        parentId: selectedParentId,
+        id,
+        depth,
+      });
+    }
+  };
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>An error occurred: {error.message}</div>;
+
+  return (
+    <div className="mx-12 my-12">
+      <div className="flex items-center gap-2">
+        <div className="px-4 py-4 rounded-full bg-blue-700">
+          <RxDashboard size={24} color="white" />
+        </div>
+        <div className="text-2xl font-bold text-gray-800">Menus</div>
+      </div>
+
+      <div className="my-10 text-sm mb-2">Menu</div>
+      <Dropdown
+        options={options}
+        onChange={(el: { value: string }) => {
+          console.log(el.value);
+        }}
+      />
+
+      <div className="mt-8 flex w-[70vw]">
+        <div className="w-1/2 pr-4">
+          <h2 className="text-xl font-semibold mb-4">Menu Structure</h2>
+          {menuStructure && (
+            <MenuTree data={menuStructure} onAddSubmenu={handleAddSubmenu} />
+          )}
+        </div>
+        <div className="w-1/2 pl-4">
+          <AddMenuForm
+            parentMenu={selectedParentName}
+            depth={selectedDepth}
+            onAddMenu={addNewMenuItem}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+    <Provider store={store}>
+      <QueryClientProvider client={queryClient}>
+        <HomeContent />
+      </QueryClientProvider>
+    </Provider>
   );
 }
