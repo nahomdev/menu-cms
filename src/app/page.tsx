@@ -33,7 +33,7 @@ function transformToNestedStructure(flatData: MenuItem[]): MenuItem[] {
     if (item.parentId === null) {
       root.push(idMap[item.id]);
     } else {
-      idMap[item.parentId].children.push(idMap[item.id]);
+      idMap[item.parentId]?.children?.push(idMap[item.id]);
     }
   });
 
@@ -64,7 +64,7 @@ function HomeContent() {
       console.log("New item added:", data);
       dispatch(addMenuItem(data));
       fetchMenuItems();
-      queryClient.invalidateQueries(["menuItems"]);
+      queryClient.invalidateQueries({ queryKey: ["menuItems"] });
     },
   });
 
